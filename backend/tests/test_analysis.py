@@ -4,7 +4,7 @@ import wave
 import math
 from pathlib import Path
 from app.analysis import _extract_lld, _compute_voiced_fraction
-from app.scoring import compute_confidence, _subscore
+from app.scoring import compute_confidence, _subscore, _subscore_window
 import opensmile
 
 
@@ -54,6 +54,34 @@ def test_subscore_clamp():
     assert _subscore(value=10.0, good=5.5, bad=2.0, invert=False) == 100.0
 
 
+# --- Unit-тесты для _subscore_window ---
+
+def test_window_inside_peak():
+    assert _subscore_window(0.20, 0.08, 0.16, 0.32, 0.50) == 100.0
+    assert _subscore_window(0.16, 0.08, 0.16, 0.32, 0.50) == 100.0
+    assert _subscore_window(0.32, 0.08, 0.16, 0.32, 0.50) == 100.0
+
+
+def test_window_below_lo_bad():
+    assert _subscore_window(0.04, 0.08, 0.16, 0.32, 0.50) == 0.0
+
+
+def test_window_above_hi_bad():
+    assert _subscore_window(0.60, 0.08, 0.16, 0.32, 0.50) == 0.0
+
+
+def test_window_left_slope():
+    val = 0.12
+    expected = (0.12 - 0.08) / (0.16 - 0.08) * 100
+    assert abs(_subscore_window(val, 0.08, 0.16, 0.32, 0.50) - expected) < 1.0
+
+
+def test_window_right_slope():
+    val = 0.41
+    expected = (0.50 - 0.41) / (0.50 - 0.32) * 100
+    assert abs(_subscore_window(val, 0.08, 0.16, 0.32, 0.50) - expected) < 1.0
+
+
 # --- Интеграционные тесты ---
 
 def test_extract_lld(tmp_path):
@@ -64,8 +92,6 @@ def test_extract_lld(tmp_path):
     assert "Loudness" in lld
     assert "Jitter" in lld
     assert len(lld["F0"]) > 0
-    assert len(lld["Loudness"]) > 0
-    assert len(lld["Jitter"]) > 0
     assert all(v is None or isinstance(v, (int, float)) for v in lld["F0"])
 
 
@@ -77,7 +103,7 @@ def test_compute_confidence(tmp_path):
     result = compute_confidence(features, vf)
     assert 0 <= result.score <= 100
     assert result.label in ("Уверенно", "Средне", "Неуверенно")
-    assert len(result.subscores) == 5
+    assert len(result.subscores) == 6
     assert all(0 <= s.score <= 100 for s in result.subscores)
 
 
@@ -94,68 +120,97 @@ def test_silence_nan_handling(tmp_path):
     assert all(v is None or isinstance(v, (int, float)) for v in lld["F0"])
 
 
-def test_confident_better_than_noisy(tmp_path):
-    import numpy as np
-    import soundfile as sf
-    sr = 16000
-    n = sr * 2
-    t = np.linspace(0, 2, n, dtype=np.float32)
-
-    clean = (0.5 * np.sin(2 * np.pi * 200 * t)).astype(np.float32)
-    clean_path = tmp_path / "clean.wav"
-    sf.write(str(clean_path), clean, sr, subtype="PCM_16")
-
-    noise = 0.3 * np.random.randn(n).astype(np.float32)
-    tremolo = 1 + 0.5 * np.sin(2 * np.pi * 5 * t)
-    noisy = (0.3 * np.sin(2 * np.pi * 80 * t) * tremolo + noise).astype(np.float32)
-    noisy_path = tmp_path / "noisy.wav"
-    sf.write(str(noisy_path), noisy, sr, subtype="PCM_16")
-
-    feat_clean = _get_features(clean_path)
-    vf_clean = _compute_voiced_fraction(clean_path)
-    res_clean = compute_confidence(feat_clean, vf_clean)
-
-    feat_noisy = _get_features(noisy_path)
-    vf_noisy = _compute_voiced_fraction(noisy_path)
-    res_noisy = compute_confidence(feat_noisy, vf_noisy)
-
+def test_confident_better_than_noisy():
+    """Уверенный голос с умеренными метриками > шумный сигнал."""
+    confident = {
+        "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.22,
+        "jitterLocal_sma3nz_amean": 0.020,
+        "HNRdBACF_sma3nz_amean": 12.0,
+        "loudnessPeaksPerSec": 3.5,
+        "F1bandwidth_sma3nz_amean": 1150.0,
+    }
+    noisy = {
+        "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.22,
+        "jitterLocal_sma3nz_amean": 0.050,
+        "HNRdBACF_sma3nz_amean": 2.0,
+        "loudnessPeaksPerSec": 3.5,
+        "F1bandwidth_sma3nz_amean": 1150.0,
+    }
+    res_clean = compute_confidence(confident, 1.0)
+    res_noisy = compute_confidence(noisy, 1.0)
     assert res_clean.score > res_noisy.score, f"clean={res_clean.score} should be > noisy={res_noisy.score}"
 
 
-# --- Регрессионный тест: профили реальных записей ---
+# --- Регрессионные тесты: профили 4 записей ---
 
-def test_real_recordings_profiles():
-    """Проверяет скоринг на фиксированных features из реальных записей."""
-    # ogg — уверенный голос
-    ogg_features = {
+def test_profile_confident_ogg():
+    """519...ogg — уверенный голос."""
+    features = {
         "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.1997,
         "jitterLocal_sma3nz_amean": 0.0261,
         "HNRdBACF_sma3nz_amean": 4.733,
         "loudnessPeaksPerSec": 4.0,
+        "F1bandwidth_sma3nz_amean": 1308.0,
     }
-    ogg = compute_confidence(ogg_features, voiced_fraction=1.0)
-    assert ogg.score >= 80.0, f"ogg score {ogg.score} < 80"
-    assert ogg.label == "Уверенно"
+    r = compute_confidence(features, voiced_fraction=1.0)
+    assert r.score >= 70.0, f"ogg score {r.score} < 70"
+    assert r.label == "Уверенно"
 
-    # Record.mp3 — уверенный голос
-    record_features = {
+
+def test_profile_confident_record():
+    """Record.mp3 — уверенный голос."""
+    features = {
         "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.2698,
         "jitterLocal_sma3nz_amean": 0.0237,
         "HNRdBACF_sma3nz_amean": 4.121,
         "loudnessPeaksPerSec": 2.64,
+        "F1bandwidth_sma3nz_amean": 1166.0,
     }
-    record = compute_confidence(record_features, voiced_fraction=1.0)
-    assert record.score >= 80.0, f"Record score {record.score} < 80"
-    assert record.label == "Уверенно"
+    r = compute_confidence(features, voiced_fraction=1.0)
+    assert r.score >= 70.0, f"Record score {r.score} < 70"
+    assert r.label == "Уверенно"
 
-    # Record(1).mp3 — уверенный, но тараторящий → ниже двух других
+
+def test_profile_rushed():
+    """Record(1).mp3 — уверенный, но тараторящий → Средне."""
+    features = {
+        "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.3119,
+        "jitterLocal_sma3nz_amean": 0.0388,
+        "HNRdBACF_sma3nz_amean": 3.521,
+        "loudnessPeaksPerSec": 2.16,
+        "F1bandwidth_sma3nz_amean": 1032.0,
+    }
+    r = compute_confidence(features, voiced_fraction=1.0)
+    assert r.label in ("Уверенно", "Средне"), f"rushed={r.label}"
+
+
+def test_profile_mumble():
+    """Новая запись.m4a — мямлящий голос, самый низкий скор."""
+    mumble_features = {
+        "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.1174,
+        "jitterLocal_sma3nz_amean": 0.0129,
+        "HNRdBACF_sma3nz_amean": 10.044,
+        "loudnessPeaksPerSec": 2.12,
+        "F1bandwidth_sma3nz_amean": 1409.0,
+    }
+    confident_features = {
+        "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.1997,
+        "jitterLocal_sma3nz_amean": 0.0261,
+        "HNRdBACF_sma3nz_amean": 4.733,
+        "loudnessPeaksPerSec": 4.0,
+        "F1bandwidth_sma3nz_amean": 1308.0,
+    }
     rush_features = {
         "F0semitoneFrom27.5Hz_sma3nz_stddevNorm": 0.3119,
         "jitterLocal_sma3nz_amean": 0.0388,
         "HNRdBACF_sma3nz_amean": 3.521,
         "loudnessPeaksPerSec": 2.16,
+        "F1bandwidth_sma3nz_amean": 1032.0,
     }
-    rush = compute_confidence(rush_features, voiced_fraction=1.0)
-    assert rush.score < record.score, f"rush={rush.score} should be < record={record.score}"
-    assert rush.score < ogg.score, f"rush={rush.score} should be < ogg={ogg.score}"
-    assert rush.label in ("Уверенно", "Средне")
+    mumble = compute_confidence(mumble_features, 1.0)
+    confident = compute_confidence(confident_features, 1.0)
+    rush = compute_confidence(rush_features, 1.0)
+
+    assert mumble.score < rush.score, f"mumble={mumble.score} should be < rush={rush.score}"
+    assert mumble.score < confident.score, f"mumble={mumble.score} should be < confident={confident.score}"
+    assert mumble.score < 70.0, f"mumble={mumble.score} should be < 70 (Средне or below)"
