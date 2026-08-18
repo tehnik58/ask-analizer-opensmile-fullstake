@@ -6,6 +6,7 @@ librosa>=1.0.0
 soundfile>=0.12.1
 noisereduce>=3.0.0
 imageio-ffmpeg>=0.6.0
+pywebview>=6.0.0
 numpy>=1.26.0
 pytest>=8.0
 pytest-anyio>=0.0.0
