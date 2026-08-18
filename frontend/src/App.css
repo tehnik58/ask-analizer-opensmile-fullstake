@@ -89,6 +89,19 @@ header h1 {
   color: #666;
 }
 
+.dropzone > span {
+  pointer-events: none;
+}
+
+.rejected-msg {
+  background: #5c1a1a;
+  color: #ff6b6b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
 .file-chips {
   display: flex;
   flex-wrap: wrap;
