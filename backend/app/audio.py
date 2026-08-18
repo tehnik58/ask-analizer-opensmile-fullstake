@@ -3,8 +3,11 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+
 import numpy as np
 import soundfile as sf
+
+from .download import download_audio
 
 NATIVE_EXTENSIONS = {".wav", ".mp3", ".ogg", ".opus", ".flac", ".aiff", ".aif", ".au", ".caf", ".w64"}
 FFMPEG_EXTENSIONS = {".m4a", ".mp4", ".aac", ".wma", ".amr", ".webm", ".3gp", ".oga", ".mp2"}
@@ -73,3 +76,16 @@ def convert_to_wav(input_bytes: bytes, original_name: str, output_path: Path) ->
             return _read_duration(output_path)
         finally:
             tmp_in_path.unlink(missing_ok=True)
+
+
+def convert_url_to_wav(url: str) -> tuple[Path, float]:
+    """Download audio from URL, convert to WAV 16kHz mono in a temp file.
+
+    Returns:
+        (temp_path, duration): path to temp WAV file and duration in seconds.
+        Caller is responsible for deleting temp_path.
+    """
+    data, filename = download_audio(url)
+    tmp = Path(tempfile.mktemp(suffix=".wav"))
+    duration = convert_to_wav(data, filename, tmp)
+    return tmp, duration

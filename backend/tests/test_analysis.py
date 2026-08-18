@@ -258,3 +258,23 @@ def test_profile_uneven():
     r = compute_confidence(features, voiced_fraction=1.0, rhythm_cv=1.15)
     assert r.label in ("Уверенно", "Средне"), f"uneven={r.label}"
     assert r.score <= 75.0, f"uneven={r.score} should be ≤ 75"
+
+
+# --- URL-based integration test ---
+
+def test_analyze_translations_file_url(tmp_path):
+    """Full pipeline: file:/// URL → analyze_translations → results."""
+    from app.analysis import analyze_translations
+    wav = tmp_path / "test.wav"
+    _make_wav(wav, duration=2.0, freq=200.0)
+    file_url = wav.as_uri()
+    results = analyze_translations([{"id": "url_test", "url": file_url}])
+    assert len(results) == 1
+    r = results[0]
+    assert r.id == "url_test"
+    assert r.audio_url == file_url
+    assert 0 < r.duration_sec <= 3.0
+    assert 0 <= r.confidence.score <= 100
+    assert r.confidence.label in ("Уверенно", "Средне", "Неуверенно")
+    assert "F0" in r.lld
+    assert len(r.lld["F0"]) > 0

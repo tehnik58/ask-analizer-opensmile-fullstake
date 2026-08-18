@@ -19,40 +19,28 @@ pip install -r requirements.txt
 ## Быстрый старт
 
 ```python
-from pathlib import Path
-from app import analyze_translations, convert_to_wav, denoise_file
+from app import analyze_translations
 
-# Конвертация в WAV (если нужно)
-wav_path = convert_to_wav(audio_bytes, "recording.mp3", Path("output.wav"))
-
-# Шумоподавление (опционально)
-denoise_file(wav_path)
-
-# Анализ
-results = analyze_translations([{
-    "id": "student_1",
-    "path": wav_path,
-    "duration": 12.5,  # секунды
-}])
+results = analyze_translations([
+    {"id": "student_1", "url": "https://example.com/recording.mp3"},
+])
 
 r = results[0]
-print(f"Score: {r.confidence.score}")       # 78.3
-print(f"Label: {r.confidence.label}")       # "Уверенно"
-print(f"LLD F0: {r.lld['F0'][:5]}")        # [45.2, 46.1, ...]
+print(f"Score: {r.confidence.score}")   # 78.3
+print(f"Label: {r.confidence.label}")   # "Уверенно"
+print(f"LLD F0: {r.lld['F0'][:5]}")    # [45.2, 46.1, ...]
 ```
 
 ## API
 
 ### `analyze_translations(translations) -> list[AudioResult]`
 
-Основная функция. Принимает список аудио, возвращает результаты анализа.
+Основная функция. Скачивает аудио по URL, конвертирует, шумоподавляет, анализирует.
 
 **Аргументы:**
 - `translations` — список dict:
   - `id` (str) — идентификатор записи
-  - `path` (Path) — путь к аудиофайлу (WAV рекомендуется)
-  - `raw_path` (Path, необязательно) — путь к исходному аудио для скоринга (по умолчанию = path)
-  - `duration` (float) — длительность в секундах
+  - `url` (str) — URL аудио (`http://`, `https://`, `file:///`)
 
 **Возвращает:** `list[AudioResult]`
 
@@ -61,7 +49,7 @@ print(f"LLD F0: {r.lld['F0'][:5]}")        # [45.2, 46.1, ...]
 | Поле | Тип | Описание |
 |---|---|---|
 | `id` | str | Идентификатор |
-| `audio_path` | Path | Путь к аудио |
+| `audio_url` | str | Исходный URL |
 | `duration_sec` | float | Длительность (сек) |
 | `confidence` | ConfidenceResult | Результат скоринга |
 | `lld` | dict | Низкоуровневые признаки (F0, Loudness, Jitter) |
@@ -80,10 +68,13 @@ print(f"LLD F0: {r.lld['F0'][:5]}")        # [45.2, 46.1, ...]
 
 | Функция | Описание |
 |---|---|
-| `convert_to_wav(input_bytes, filename, output_path)` | Конвертирует аудио в WAV 16kHz mono |
-| `validate_file(filename, file_size)` | Проверяет формат и размер |
-| `denoise_file(path)` | Шумоподавление (модифицирует файл) |
+| `download_audio(url)` | Скачивание по URL (bytes, filename) |
+| `convert_url_to_wav(url)` | URL → WAV 16kHz mono (temp file) |
+| `convert_to_wav(bytes, name, path)` | Конвертация байтов в WAV |
+| `validate_file(filename, size)` | Проверка формата и размера |
+| `denoise_file(path)` | Шумоподавление (in-place) |
 | `extract_lld(audio_path)` | Извлечение LLD-признаков |
+| `compute_confidence(...)` | Прямой вызов скоринга |
 
 ## Поддерживаемые форматы
 

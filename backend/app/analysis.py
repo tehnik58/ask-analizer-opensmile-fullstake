@@ -1,4 +1,6 @@
 import math
+import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -6,6 +8,8 @@ import opensmile
 import numpy as np
 
 from .scoring import compute_confidence, ConfidenceResult
+from .audio import convert_url_to_wav
+from .denoise import denoise_file
 
 smile_lld = opensmile.Smile(
     feature_set=opensmile.FeatureSet.eGeMAPSv02,
@@ -21,7 +25,7 @@ smile_func = opensmile.Smile(
 @dataclass
 class AudioResult:
     id: str
-    audio_path: Path
+    audio_url: str
     duration_sec: float
     confidence: ConfidenceResult
     lld: dict = field(default_factory=dict)
@@ -72,32 +76,44 @@ def compute_rhythm_cv(audio_path: Path) -> float:
 
 def analyze_translations(translations):
     """
-    Analyze a list of audio translations.
+    Analyze a list of audio translations from URLs.
 
     Args:
         translations: list of dicts, each with:
             - id (str): unique identifier
-            - path (Path): path to audio file (WAV recommended)
-            - raw_path (Path, optional): path to raw audio for scoring (defaults to path)
-            - duration (float): duration in seconds
+            - url (str): audio URL (http://, https://, file:///)
 
     Returns:
         list[AudioResult]: analysis results with confidence scores and LLD data.
+        Temp files are cleaned up automatically.
     """
     results = []
-    for tr in translations:
-        lld = extract_lld(tr["path"])
-        raw_path = tr.get("raw_path", tr["path"])
-        df = smile_func.process_file(str(raw_path))
-        features = df.iloc[0].to_dict()
-        voiced_fraction = compute_voiced_fraction(raw_path)
-        rhythm_cv = compute_rhythm_cv(raw_path)
-        conf = compute_confidence(features, voiced_fraction, rhythm_cv)
-        results.append(AudioResult(
-            id=tr["id"],
-            audio_path=raw_path,
-            duration_sec=tr["duration"],
-            confidence=conf,
-            lld=lld,
-        ))
+    tmp_files = []
+    try:
+        for tr in translations:
+            raw_path, duration = convert_url_to_wav(tr["url"])
+            tmp_files.append(raw_path)
+
+            denoised_path = Path(tempfile.mktemp(suffix=".wav"))
+            tmp_files.append(denoised_path)
+            shutil.copy2(raw_path, denoised_path)
+            denoise_file(denoised_path)
+
+            lld = extract_lld(denoised_path)
+            df = smile_func.process_file(str(raw_path))
+            features = df.iloc[0].to_dict()
+            voiced_fraction = compute_voiced_fraction(raw_path)
+            rhythm_cv = compute_rhythm_cv(raw_path)
+            conf = compute_confidence(features, voiced_fraction, rhythm_cv)
+
+            results.append(AudioResult(
+                id=tr["id"],
+                audio_url=tr["url"],
+                duration_sec=round(duration, 2),
+                confidence=conf,
+                lld=lld,
+            ))
+    finally:
+        for f in tmp_files:
+            f.unlink(missing_ok=True)
     return results
