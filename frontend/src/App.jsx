@@ -4,6 +4,7 @@ import AudioPlayer from "./components/AudioPlayer";
 import MetricsChart from "./components/MetricsChart";
 import MetricToggles from "./components/MetricToggles";
 import ConfidenceBadge from "./components/ConfidenceBadge";
+import MetricsBreakdown from "./components/MetricsBreakdown";
 import { uploadFiles, getResults } from "./api";
 import "./App.css";
 
@@ -85,6 +86,7 @@ function App() {
                 <ConfidenceBadge score={tr.confidence_score} label={tr.confidence_label} />
               </h2>
               {tr.warning && <div className="warning">{tr.warning}</div>}
+              {tr.metrics && <MetricsBreakdown subscores={tr.metrics.subscores} />}
               <AudioPlayer
                 src={tr.audio_url}
                 label={tr.id}
