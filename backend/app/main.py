@@ -31,26 +31,15 @@ def _run_analysis(session_id: str, session_dir: Path):
 
 @app.post("/api/upload/")
 async def upload(
-    original: UploadFile = File(...),
     translations: list[UploadFile] = File(...),
 ):
     if not translations:
-        raise HTTPException(400, "Загрузите хотя бы один перевод")
+        raise HTTPException(400, "Загрузите хотя бы одну запись")
 
     session_id = create_session()
     session_dir = DATA_DIR / session_id
 
-    # Сохраняем оригинал
-    orig_bytes = await original.read()
-    err = validate_file(original.filename, len(orig_bytes))
-    if err:
-        raise HTTPException(422, err)
-    orig_path = session_dir / "original.wav"
-    duration = convert_to_wav(orig_bytes, original.filename, orig_path)
-    session = get_session(session_id)
-    session["original"] = {"filename": original.filename, "path": orig_path, "duration": duration}
-
-    # Сохраняем переводы
+    # Сохраняем записи
     for i, tr in enumerate(translations):
         tr_bytes = await tr.read()
         err = validate_file(tr.filename, len(tr_bytes))
@@ -58,6 +47,7 @@ async def upload(
             raise HTTPException(422, f"{tr.filename}: {err}")
         tr_path = session_dir / f"translation_{i}.wav"
         tr_dur = convert_to_wav(tr_bytes, tr.filename, tr_path)
+        session = get_session(session_id)
         session["translations"].append({
             "id": f"trans_{i}",
             "filename": tr.filename,

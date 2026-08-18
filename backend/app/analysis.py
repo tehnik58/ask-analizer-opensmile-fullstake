@@ -61,15 +61,7 @@ def analyze_session(session_id: str, session_dir: Path):
     from .sessions import get_session, set_results
     session = get_session(session_id)
 
-    orig = session["original"]
-    orig_lld = _extract_lld(orig["path"])
-
     results = {
-        "original": {
-            "audio_url": f"/static/{session_id}/original.wav",
-            "duration_sec": round(orig["duration"], 2),
-            "lld": orig_lld,
-        },
         "translations": [],
     }
 

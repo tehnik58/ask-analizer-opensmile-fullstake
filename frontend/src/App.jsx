@@ -12,7 +12,6 @@ function App() {
   const [polling, setPolling] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
-  const [origTime, setOrigTime] = useState(0);
   const [transTimes, setTransTimes] = useState({});
   const [enabledMetrics, setEnabledMetrics] = useState(["F0", "Loudness"]);
 
@@ -43,14 +42,13 @@ function App() {
     setPolling(false);
   }, []);
 
-  const handleUpload = async (original, translations) => {
+  const handleUpload = async (translations) => {
     setError(null);
     setResults(null);
     setTransTimes({});
-    setOrigTime(0);
     setLoading(true);
     try {
-      const { session_id } = await uploadFiles(original, translations);
+      const { session_id } = await uploadFiles(translations);
       poll(session_id);
     } catch (e) {
       setError(e.message);
@@ -80,21 +78,6 @@ function App() {
         <div className="results">
           <MetricToggles enabled={enabledMetrics} onToggle={toggleMetric} />
 
-          <section className="result-section">
-            <h2>Оригинал</h2>
-            <AudioPlayer
-              src={results.original.audio_url}
-              label="Original"
-              onTimeUpdate={setOrigTime}
-            />
-            <MetricsChart
-              lld={results.original.lld}
-              duration={results.original.duration_sec}
-              currentTime={origTime}
-              enabledMetrics={enabledMetrics}
-            />
-          </section>
-
           {results.translations.map((tr, i) => (
             <section key={tr.id} className="result-section">
               <h2>
@@ -112,7 +95,6 @@ function App() {
                 duration={tr.duration_sec}
                 currentTime={transTimes[tr.id] || 0}
                 enabledMetrics={enabledMetrics}
-                overlayLld={results.original.lld}
               />
             </section>
           ))}

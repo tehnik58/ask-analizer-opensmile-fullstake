@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { METRICS } from "./MetricToggles";
 
-export default function MetricsChart({ lld, duration, currentTime, enabledMetrics, overlayLld }) {
+export default function MetricsChart({ lld, duration, currentTime, enabledMetrics }) {
   const data = useMemo(() => {
     if (!lld || !lld.F0 || lld.F0.length === 0) return [];
     const len = lld.F0.length;
@@ -22,19 +22,9 @@ export default function MetricsChart({ lld, duration, currentTime, enabledMetric
         const val = lld[m.key]?.[i];
         point[m.key] = val === null ? undefined : val;
       }
-      if (overlayLld) {
-        const oLen = overlayLld.F0?.length || 0;
-        if (oLen > 0) {
-          const oIdx = Math.floor((i / len) * oLen);
-          for (const m of METRICS) {
-            const val = overlayLld[m.key]?.[oIdx];
-            point[`orig_${m.key}`] = val === null ? undefined : val;
-          }
-        }
-      }
       return point;
     });
-  }, [lld, duration, overlayLld]);
+  }, [lld, duration]);
 
   if (data.length === 0) return <div className="chart-empty">Нет данных</div>;
 
@@ -64,19 +54,6 @@ export default function MetricsChart({ lld, duration, currentTime, enabledMetric
                 strokeWidth={1.5}
                 isAnimationActive={false}
               />
-              {overlayLld && (
-                <Line
-                  type="monotone"
-                  dataKey={`orig_${m.key}`}
-                  stroke="#ffffff"
-                  strokeDasharray="4 4"
-                  dot={false}
-                  connectNulls={false}
-                  strokeWidth={1}
-                  opacity={0.4}
-                  isAnimationActive={false}
-                />
-              )}
               {caretX != null && (
                 <ReferenceLine x={caretX} stroke="#ff006e" strokeWidth={2} />
               )}

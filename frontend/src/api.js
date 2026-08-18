@@ -1,8 +1,7 @@
 const API_BASE = import.meta.env.DEV ? "" : "http://localhost:8000";
 
-export async function uploadFiles(original, translations) {
+export async function uploadFiles(translations) {
   const form = new FormData();
-  form.append("original", original);
   for (const f of translations) {
     form.append("translations", f);
   }

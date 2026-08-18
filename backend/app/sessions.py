@@ -18,7 +18,6 @@ def create_session() -> str:
             "session_id": session_id,
             "status": "processing",
             "dir": session_dir,
-            "original": None,
             "translations": [],
             "results": None,
             "error": None,
@@ -53,6 +52,5 @@ def get_results_for_api(session_id: str) -> dict | None:
         "session_id": s["session_id"],
         "status": s["status"],
         "error": s.get("error"),
-        "original": s["results"]["original"] if s["results"] else None,
         "translations": s["results"]["translations"] if s["results"] else [],
     }
