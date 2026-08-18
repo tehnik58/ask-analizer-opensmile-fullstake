@@ -298,6 +298,30 @@ button:disabled {
   text-align: center;
 }
 
+.chart-container {
+  position: relative;
+}
+
+.chart-area-overlay {
+  position: absolute;
+  left: 50px;
+  right: 16px;
+  top: 4px;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.chart-caret {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ff006e;
+  left: 0;
+  will-change: left;
+}
+
 input[type="file"] {
   font-size: 0.85rem;
   color: #ccc;
