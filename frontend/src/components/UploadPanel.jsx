@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const ALLOWED = [".wav", ".mp3", ".ogg"];
+const ALLOWED = [
+  ".wav", ".mp3", ".ogg", ".opus", ".flac", ".aiff", ".aif",
+  ".au", ".caf", ".w64", ".m4a", ".mp4", ".aac", ".wma",
+  ".amr", ".webm", ".3gp", ".oga", ".mp2",
+];
 
 function isAllowed(name) {
   const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
@@ -104,7 +108,7 @@ export default function UploadPanel({ onUpload, loading }) {
         <input
           ref={inputRef}
           type="file"
-          accept=".wav,.mp3,.ogg"
+          accept=".wav,.mp3,.ogg,.opus,.flac,.aiff,.aif,.au,.caf,.w64,.m4a,.mp4,.aac,.wma,.amr,.webm,.3gp,.oga,.mp2"
           multiple
           onChange={handleInputChange}
           style={{ display: "none" }}
@@ -112,12 +116,12 @@ export default function UploadPanel({ onUpload, loading }) {
         <span className="dropzone-text">
           {dragOver ? "Отпустите файлы" : "Перетащите файлы сюда или нажмите для выбора"}
         </span>
-        <span className="dropzone-hint">.wav, .mp3, .ogg — до 20 МБ каждый</span>
+        <span className="dropzone-hint">WAV, MP3, OGG, M4A, FLAC и другие — до 20 МБ каждый</span>
       </div>
 
       {rejected.length > 0 && (
         <div className="rejected-msg">
-          Не поддерживается: {rejected.join(", ")} (допустимы: .wav, .mp3, .ogg)
+          Не поддерживается: {rejected.join(", ")} (допустимы: WAV, MP3, OGG, M4A, FLAC и другие)
         </div>
       )}
 
