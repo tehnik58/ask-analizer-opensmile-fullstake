@@ -1,7 +1,10 @@
 import io
 import wave
 import struct
+import math
 import pytest
+import numpy as np
+import soundfile as sf
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 
@@ -73,3 +76,36 @@ async def test_results_not_found():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/api/results/nonexistent")
         assert resp.status_code == 404
+
+
+def _make_ogg_bytes(duration_sec: float = 1.0, sr: int = 16000) -> bytes:
+    n = int(sr * duration_sec)
+    audio = np.zeros(n, dtype=np.float32)
+    buf = io.BytesIO()
+    sf.write(buf, audio, sr, format="OGG", subtype="VORBIS")
+    return buf.getvalue()
+
+
+@pytest.mark.anyio
+async def test_upload_ogg():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        ogg_bytes = _make_ogg_bytes(1.5)
+        wav_bytes = _make_wav_bytes(1.5)
+        files = [
+            ("original", ("orig.ogg", ogg_bytes, "audio/ogg")),
+            ("translations", ("tr1.ogg", ogg_bytes, "audio/ogg")),
+            ("translations", ("tr2.wav", wav_bytes, "audio/wav")),
+        ]
+        resp = await client.post("/api/upload/", files=files)
+        assert resp.status_code == 200
+        session_id = resp.json()["session_id"]
+
+        import asyncio
+        await asyncio.sleep(3)
+
+        resp2 = await client.get(f"/api/results/{session_id}")
+        result = resp2.json()
+        assert result["status"] == "done"
+        assert result["original"]["duration_sec"] > 0
+        assert len(result["translations"]) == 2

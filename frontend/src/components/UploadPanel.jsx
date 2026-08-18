@@ -18,7 +18,7 @@ export default function UploadPanel({ onUpload, loading }) {
           Оригинал:
           <input
             type="file"
-            accept=".wav,.mp3"
+            accept=".wav,.mp3,.ogg"
             onChange={(e) => setOriginal(e.target.files[0])}
           />
         </label>
@@ -29,7 +29,7 @@ export default function UploadPanel({ onUpload, loading }) {
           Переводы:
           <input
             type="file"
-            accept=".wav,.mp3"
+            accept=".wav,.mp3,.ogg"
             multiple
             onChange={(e) => setTranslations(Array.from(e.target.files))}
           />

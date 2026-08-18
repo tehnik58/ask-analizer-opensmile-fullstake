@@ -3,7 +3,7 @@ import numpy as np
 import soundfile as sf
 from pathlib import Path
 
-ALLOWED_EXTENSIONS = {".wav", ".mp3"}
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg"}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 TARGET_SR = 16000
 
