@@ -3,7 +3,7 @@ import struct
 import wave
 import math
 from pathlib import Path
-from app.analysis import _extract_lld, _compute_voiced_fraction, _compute_rhythm_cv
+from app.analysis import extract_lld, compute_voiced_fraction, compute_rhythm_cv
 from app.scoring import compute_confidence, _subscore, _subscore_window
 import opensmile
 
@@ -99,7 +99,7 @@ def test_rhythm_cv_equal_segments(tmp_path):
     audio = envelope * np.sin(2 * np.pi * 200 * t).astype(np.float32)
     path = tmp_path / "even.wav"
     sf.write(str(path), audio, sr, subtype="PCM_16")
-    cv = _compute_rhythm_cv(path)
+    cv = compute_rhythm_cv(path)
     assert cv < 1.0, f"even CV {cv} should be < 1.0"
 
 
@@ -111,16 +111,16 @@ def test_rhythm_cv_short_audio(tmp_path):
     audio = np.zeros(sr, dtype=np.float32)
     path = tmp_path / "short.wav"
     sf.write(str(path), audio, sr, subtype="PCM_16")
-    cv = _compute_rhythm_cv(path)
+    cv = compute_rhythm_cv(path)
     assert cv == 0.5
 
 
 # --- Интеграционные тесты ---
 
-def test_extract_lld(tmp_path):
+def testextract_lld(tmp_path):
     wav = tmp_path / "test.wav"
     _make_wav(wav)
-    lld = _extract_lld(wav)
+    lld = extract_lld(wav)
     assert "F0" in lld
     assert "Loudness" in lld
     assert "Jitter" in lld
@@ -132,7 +132,7 @@ def test_compute_confidence(tmp_path):
     wav = tmp_path / "test.wav"
     _make_wav(wav)
     features = _get_features(wav)
-    vf = _compute_voiced_fraction(wav)
+    vf = compute_voiced_fraction(wav)
     result = compute_confidence(features, vf)
     assert 0 <= result.score <= 100
     assert result.label in ("Уверенно", "Средне", "Неуверенно")
@@ -148,7 +148,7 @@ def test_silence_nan_handling(tmp_path):
         wf.setsampwidth(2)
         wf.setframerate(16000)
         wf.writeframes(struct.pack(f"<{'h' * n}", *([0] * n)))
-    lld = _extract_lld(wav)
+    lld = extract_lld(wav)
     assert len(lld["F0"]) > 0
     assert all(v is None or isinstance(v, (int, float)) for v in lld["F0"])
 

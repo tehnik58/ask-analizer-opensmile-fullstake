@@ -1,7 +1,11 @@
 import math
+from dataclasses import dataclass, field
 from pathlib import Path
+
 import opensmile
 import numpy as np
+
+from .scoring import compute_confidence, ConfidenceResult
 
 smile_lld = opensmile.Smile(
     feature_set=opensmile.FeatureSet.eGeMAPSv02,
@@ -14,7 +18,17 @@ smile_func = opensmile.Smile(
 )
 
 
-def _extract_lld(audio_path: Path) -> dict:
+@dataclass
+class AudioResult:
+    id: str
+    audio_path: Path
+    duration_sec: float
+    confidence: ConfidenceResult
+    lld: dict = field(default_factory=dict)
+
+
+def extract_lld(audio_path: Path) -> dict:
+    """Extract low-level descriptors (F0, Loudness, Jitter) for graph visualization."""
     df = smile_lld.process_file(str(audio_path))
 
     def _series(col):
@@ -28,7 +42,8 @@ def _extract_lld(audio_path: Path) -> dict:
     }
 
 
-def _compute_voiced_fraction(audio_path: Path) -> float:
+def compute_voiced_fraction(audio_path: Path) -> float:
+    """Fraction of frames with voiced speech (F0 detected)."""
     df = smile_lld.process_file(str(audio_path))
     f0_col = "F0semitoneFrom27.5Hz_sma3nz"
     total = len(df)
@@ -36,9 +51,8 @@ def _compute_voiced_fraction(audio_path: Path) -> float:
     return round(voiced / total, 4) if total > 0 else 0.0
 
 
-def _compute_rhythm_cv(audio_path: Path) -> float:
-    """CV (coefficient of variation) длительностей сегментов между всплесками громкости.
-    Высокий CV = рваный ритм. Возвращает 0.5 при слишком коротких записях (<5 всплесков)."""
+def compute_rhythm_cv(audio_path: Path) -> float:
+    """CV of segment durations between loudness onsets. High CV = uneven rhythm."""
     df = smile_lld.process_file(str(audio_path))
     loud = df["Loudness_sma3"].to_numpy()
     if len(loud) < 10:
@@ -56,46 +70,34 @@ def _compute_rhythm_cv(audio_path: Path) -> float:
     return float(np.std(seg_lens) / mean_len)
 
 
-def analyze_session(session_id: str, session_dir: Path):
-    from .sessions import get_session, set_results
-    from .scoring import compute_confidence
-    session = get_session(session_id)
+def analyze_translations(translations):
+    """
+    Analyze a list of audio translations.
 
-    results = {
-        "translations": [],
-    }
+    Args:
+        translations: list of dicts, each with:
+            - id (str): unique identifier
+            - path (Path): path to audio file (WAV recommended)
+            - raw_path (Path, optional): path to raw audio for scoring (defaults to path)
+            - duration (float): duration in seconds
 
-    for tr in session["translations"]:
-        # LLD для графиков — по denoised (для плеера)
-        lld = _extract_lld(tr["path"])
-
-        # Метрики для скоринга — по RAW (denoise искажает F0Std, F1bw)
+    Returns:
+        list[AudioResult]: analysis results with confidence scores and LLD data.
+    """
+    results = []
+    for tr in translations:
+        lld = extract_lld(tr["path"])
         raw_path = tr.get("raw_path", tr["path"])
         df = smile_func.process_file(str(raw_path))
         features = df.iloc[0].to_dict()
-        voiced_fraction = _compute_voiced_fraction(raw_path)
-        rhythm_cv = _compute_rhythm_cv(raw_path)
-
+        voiced_fraction = compute_voiced_fraction(raw_path)
+        rhythm_cv = compute_rhythm_cv(raw_path)
         conf = compute_confidence(features, voiced_fraction, rhythm_cv)
-
-        entry = {
-            "id": tr["id"],
-            "audio_url": f"/static/{session_id}/{tr['path'].name}",
-            "duration_sec": round(tr["duration"], 2),
-            "confidence_score": conf.score,
-            "confidence_label": conf.label,
-            "lld": lld,
-            "metrics": {
-                "hnr": conf.hnr_value,
-                "subscores": [
-                    {"name": s.name, "value": s.value, "score": s.score}
-                    for s in conf.subscores
-                ],
-            },
-        }
-        if conf.is_noisy:
-            entry["warning"] = "Запись шумная, оценка может быть неточной"
-
-        results["translations"].append(entry)
-
-    set_results(session_id, results)
+        results.append(AudioResult(
+            id=tr["id"],
+            audio_path=raw_path,
+            duration_sec=tr["duration"],
+            confidence=conf,
+            lld=lld,
+        ))
+    return results
