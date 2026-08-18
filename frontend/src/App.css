@@ -57,6 +57,66 @@ header h1 {
   color: #8ecae6;
 }
 
+.dropzone {
+  border: 2px dashed #333;
+  border-radius: 10px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  margin-bottom: 12px;
+}
+
+.dropzone:hover {
+  border-color: #8ecae6;
+}
+
+.dropzone-active {
+  border-color: #8ecae6;
+  background: rgba(142, 202, 230, 0.08);
+}
+
+.dropzone-text {
+  display: block;
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+.dropzone-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f3460;
+  color: #8ecae6;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+}
+
+.chip-remove {
+  background: none;
+  border: none;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0;
+  line-height: 1;
+}
+
 button {
   background: #0f3460;
   color: #fff;
