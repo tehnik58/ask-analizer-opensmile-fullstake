@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import UploadPanel from "./components/UploadPanel";
 import AudioPlayer from "./components/AudioPlayer";
 import MetricsChart from "./components/MetricsChart";
@@ -13,8 +13,19 @@ function App() {
   const [polling, setPolling] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
-  const [transTimes, setTransTimes] = useState({});
   const [enabledMetrics, setEnabledMetrics] = useState(["F0", "Loudness"]);
+
+  // Реестр кареток: id → Set<HTMLElement>
+  const caretRegistry = useRef({});
+
+  const registerCaret = useCallback((id, el, remove) => {
+    if (!caretRegistry.current[id]) caretRegistry.current[id] = new Set();
+    if (remove) {
+      caretRegistry.current[id].delete(el);
+    } else {
+      caretRegistry.current[id].add(el);
+    }
+  }, []);
 
   const poll = useCallback(async (sessionId) => {
     setPolling(true);
@@ -46,7 +57,7 @@ function App() {
   const handleUpload = async (translations) => {
     setError(null);
     setResults(null);
-    setTransTimes({});
+    caretRegistry.current = {};
     setLoading(true);
     try {
       const { session_id } = await uploadFiles(translations);
@@ -63,6 +74,19 @@ function App() {
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
+
+  const makeTimeUpdateHandler = useCallback((id) => {
+    return (t, dur) => {
+      const els = caretRegistry.current[id];
+      if (!els) return;
+      const pct = dur > 0 ? (t / dur) * 100 : 0;
+      els.forEach((el) => { el.style.left = `${pct}%`; });
+    };
+  }, []);
+
+  const makeRegisterCaret = useCallback((id) => {
+    return (el, remove) => registerCaret(id, el, remove);
+  }, [registerCaret]);
 
   return (
     <div className="app">
@@ -90,13 +114,14 @@ function App() {
               <AudioPlayer
                 src={tr.audio_url}
                 label={tr.id}
-                onTimeUpdate={(t) => setTransTimes((prev) => ({ ...prev, [tr.id]: t }))}
+                duration={tr.duration_sec}
+                onTimeUpdate={makeTimeUpdateHandler(tr.id)}
               />
               <MetricsChart
                 lld={tr.lld}
                 duration={tr.duration_sec}
-                currentTime={transTimes[tr.id] || 0}
                 enabledMetrics={enabledMetrics}
+                registerCaret={makeRegisterCaret(tr.id)}
               />
             </section>
           ))}
