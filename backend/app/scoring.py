@@ -1,8 +1,13 @@
 """
 Модуль скоринга уверенности речи.
 
-6 суб-скоров 0–100 с насыщением (линейная интерполяция good→bad, clamp).
+5 суб-скоров 0–100 с насыщением (линейная интерполяция good→bad, clamp).
 Итоговый скор = взвешенная сумма.
+
+F0Mean удалена — абсолютная высота тона зависит от пола, а не от уверенности.
+Tempo (loudnessPeaksPerSec) — слабый прокси темпа; калибровка отмечена как
+ограничение: торопливая речь штрафуется косвенно через кластер гладкости
+голоса (F0Std + Jitter + HNR), а не через Tempo напрямую.
 """
 
 from dataclasses import dataclass
@@ -26,46 +31,34 @@ class ConfidenceResult:
     is_noisy: bool
 
 
-# Пороговые значения: (good, bad) — good = «уверенно», bad = «неуверенно»
-# Если bad > good (например jitter), то score = map(value, bad, good) → инверсия
-# Если good > bad (например HNR), то score = map(value, bad, good)
-
 METRIC_DEFS = {
     "F0Std": {
         "name": "F0 вариативность",
         "feature": "F0semitoneFrom27.5Hz_sma3nz_stddevNorm",
-        "good": 0.10,   # низкий разброс → монотонно, уверенно
-        "bad": 0.35,    # высокий разброс → дрожание
-        "invert": True, # lower value = higher score
+        "good": 0.28,
+        "bad": 0.50,
+        "invert": True,
         "weight": 0.25,
-    },
-    "F0Mean": {
-        "name": "F0 средний тон",
-        "feature": "F0semitoneFrom27.5Hz_sma3nz_amean",
-        "good": 35.0,   # более высокий тон → увереннее
-        "bad": 20.0,
-        "invert": False,
-        "weight": 0.10,
     },
     "Jitter": {
         "name": "Jitter (дрожание)",
         "feature": "jitterLocal_sma3nz_amean",
-        "good": 0.005,  # 0.5% — чистый голос
-        "bad": 0.040,   # 4% — патология
+        "good": 0.025,
+        "bad": 0.055,
         "invert": True,
-        "weight": 0.20,
+        "weight": 0.25,
     },
     "HNR": {
         "name": "HNR (гармоничность)",
         "feature": "HNRdBACF_sma3nz_amean",
-        "good": 15.0,   # чистый голос
-        "bad": 3.0,     # очень шумный
+        "good": 5.5,
+        "bad": 2.0,
         "invert": False,
-        "weight": 0.20,
+        "weight": 0.25,
     },
     "VoicedFraction": {
         "name": "Доля речи",
-        "feature": None,  # вычисляется из LLD отдельно
+        "feature": None,
         "good": 0.80,
         "bad": 0.40,
         "invert": False,
@@ -74,27 +67,25 @@ METRIC_DEFS = {
     "Tempo": {
         "name": "Темп речи",
         "feature": "loudnessPeaksPerSec",
-        "good": 4.0,    # быстрая речь → увереннее
-        "bad": 1.5,     # медленная → неувереннее
+        "good": 3.5,
+        "bad": 1.0,
         "invert": False,
         "weight": 0.10,
     },
 }
 
-NOISE_HNR_THRESHOLD = 10.0  # дБ — ниже этого значения запись считается шумной
+NOISE_HNR_THRESHOLD = 10.0
 
 
 def _subscore(value: float, good: float, bad: float, invert: bool) -> float:
     """Линейная интерполяция 0–100 с clamp."""
     if invert:
-        # lower value = better score
         if value <= good:
             return 100.0
         if value >= bad:
             return 0.0
         return max(0.0, min(100.0, (bad - value) / (bad - good) * 100))
     else:
-        # higher value = better score
         if value >= good:
             return 100.0
         if value <= bad:
@@ -103,12 +94,6 @@ def _subscore(value: float, good: float, bad: float, invert: bool) -> float:
 
 
 def compute_confidence(features: dict, voiced_fraction: float) -> ConfidenceResult:
-    """
-    Вычисляет скор уверенности.
-
-    features: dict с ключами из METRIC_DEFS[*]["feature"]
-    voiced_fraction: доля кадров с голосом (0–1)
-    """
     subscores = []
     weighted_sum = 0.0
     total_weight = 0.0
