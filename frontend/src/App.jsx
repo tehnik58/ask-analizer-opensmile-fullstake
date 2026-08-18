@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import UploadPanel from "./components/UploadPanel";
 import AudioPlayer from "./components/AudioPlayer";
+import MetricsChart from "./components/MetricsChart";
+import MetricToggles from "./components/MetricToggles";
 import ConfidenceBadge from "./components/ConfidenceBadge";
 import { uploadFiles, getResults } from "./api";
 import "./App.css";
@@ -10,6 +12,9 @@ function App() {
   const [polling, setPolling] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [origTime, setOrigTime] = useState(0);
+  const [transTimes, setTransTimes] = useState({});
+  const [enabledMetrics, setEnabledMetrics] = useState(["F0", "Loudness"]);
 
   const poll = useCallback(async (sessionId) => {
     setPolling(true);
@@ -41,6 +46,8 @@ function App() {
   const handleUpload = async (original, translations) => {
     setError(null);
     setResults(null);
+    setTransTimes({});
+    setOrigTime(0);
     setLoading(true);
     try {
       const { session_id } = await uploadFiles(original, translations);
@@ -52,6 +59,12 @@ function App() {
     }
   };
 
+  const toggleMetric = (key) => {
+    setEnabledMetrics((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
   return (
     <div className="app">
       <header>
@@ -61,14 +74,25 @@ function App() {
       <UploadPanel onUpload={handleUpload} loading={loading || polling} />
 
       {error && <div className="error">{error}</div>}
-
       {polling && <div className="status">Анализ выполняется...</div>}
 
       {results && (
         <div className="results">
+          <MetricToggles enabled={enabledMetrics} onToggle={toggleMetric} />
+
           <section className="result-section">
             <h2>Оригинал</h2>
-            <AudioPlayer src={results.original.audio_url} label="Original" />
+            <AudioPlayer
+              src={results.original.audio_url}
+              label="Original"
+              onTimeUpdate={setOrigTime}
+            />
+            <MetricsChart
+              lld={results.original.lld}
+              duration={results.original.duration_sec}
+              currentTime={origTime}
+              enabledMetrics={enabledMetrics}
+            />
           </section>
 
           {results.translations.map((tr, i) => (
@@ -78,7 +102,18 @@ function App() {
                 <ConfidenceBadge score={tr.confidence_score} label={tr.confidence_label} />
               </h2>
               {tr.warning && <div className="warning">{tr.warning}</div>}
-              <AudioPlayer src={tr.audio_url} label={tr.id} />
+              <AudioPlayer
+                src={tr.audio_url}
+                label={tr.id}
+                onTimeUpdate={(t) => setTransTimes((prev) => ({ ...prev, [tr.id]: t }))}
+              />
+              <MetricsChart
+                lld={tr.lld}
+                duration={tr.duration_sec}
+                currentTime={transTimes[tr.id] || 0}
+                enabledMetrics={enabledMetrics}
+                overlayLld={results.original.lld}
+              />
             </section>
           ))}
         </div>

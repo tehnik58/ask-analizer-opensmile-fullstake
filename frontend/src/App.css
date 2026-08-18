@@ -183,3 +183,44 @@ button:disabled {
   min-width: 90px;
   text-align: right;
 }
+
+.metric-toggles {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  accent-color: #8ecae6;
+}
+
+.metrics-chart {
+  margin-top: 10px;
+}
+
+.chart-row {
+  margin-bottom: 8px;
+}
+
+.chart-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.chart-empty {
+  color: #666;
+  font-size: 0.85rem;
+  padding: 20px;
+  text-align: center;
+}
