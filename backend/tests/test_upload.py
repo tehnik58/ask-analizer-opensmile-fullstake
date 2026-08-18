@@ -45,7 +45,17 @@ async def test_upload_and_results():
         result = resp2.json()
         assert result["status"] == "done"
         assert result["original"]["duration_sec"] > 0
+        assert result["original"]["audio_url"].endswith(".wav")
+        assert "lld" in result["original"]
+        assert "F0" in result["original"]["lld"]
+        assert "Loudness" in result["original"]["lld"]
         assert len(result["translations"]) == 2
+        tr = result["translations"][0]
+        assert "confidence_score" in tr
+        assert "confidence_label" in tr
+        assert tr["confidence_label"] in ("Уверенно", "Средне", "Неуверенно")
+        assert 0 <= tr["confidence_score"] <= 100
+        assert "lld" in tr
 
 
 @pytest.mark.anyio
