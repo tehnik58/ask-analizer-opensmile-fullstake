@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.DEV ? "" : "http://localhost:8000";
+const API_BASE = "";
 
 export async function uploadFiles(translations) {
   const form = new FormData();

@@ -1,9 +1,11 @@
 import asyncio
 import shutil
+import sys
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from .sessions import create_session, get_session, set_status, get_results_for_api, DATA_DIR
 from .audio import validate_file, convert_to_wav
@@ -20,6 +22,18 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory=str(DATA_DIR)), name="static")
+
+
+def _get_frontend_dist() -> Path | None:
+    """Возвращает путь к собранному фронтенду или None (для dev-режима)."""
+    if getattr(sys, "frozen", False):
+        # PyInstaller — dist лежит рядом с exe в подпапке web/
+        base = Path(sys._MEIPASS)
+        dist = base / "web"
+    else:
+        # Dev: backend/../frontend/dist
+        dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    return dist if dist.is_dir() else None
 
 
 def _run_analysis(session_id: str, session_dir: Path):
@@ -75,3 +89,22 @@ async def get_results(session_id: str):
     if result is None:
         raise HTTPException(404, "Сессия не найдена")
     return result
+
+
+# --- Раздача фронтенда (dev и desktop) ---
+
+_frontend_dist = _get_frontend_dist()
+
+if _frontend_dist:
+    app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="assets")
+
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(str(_frontend_dist / "index.html"))
+
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        file = _frontend_dist / path
+        if file.is_file():
+            return FileResponse(str(file))
+        return FileResponse(str(_frontend_dist / "index.html"))
