@@ -36,6 +36,26 @@ def _compute_voiced_fraction(audio_path: Path) -> float:
     return round(voiced / total, 4) if total > 0 else 0.0
 
 
+def _compute_rhythm_cv(audio_path: Path) -> float:
+    """CV (coefficient of variation) длительностей сегментов между всплесками громкости.
+    Высокий CV = рваный ритм. Возвращает 0.5 при слишком коротких записях (<5 всплесков)."""
+    df = smile_lld.process_file(str(audio_path))
+    loud = df["Loudness_sma3"].to_numpy()
+    if len(loud) < 10:
+        return 0.5
+    threshold = np.percentile(loud, 75)
+    active = loud > threshold
+    changes = np.diff(active.astype(int))
+    onsets = np.where(changes == 1)[0]
+    if len(onsets) < 5:
+        return 0.5
+    seg_lens = np.diff(onsets).astype(float)
+    mean_len = np.mean(seg_lens)
+    if mean_len == 0:
+        return 0.5
+    return float(np.std(seg_lens) / mean_len)
+
+
 def analyze_session(session_id: str, session_dir: Path):
     from .sessions import get_session, set_results
     from .scoring import compute_confidence
@@ -46,13 +66,17 @@ def analyze_session(session_id: str, session_dir: Path):
     }
 
     for tr in session["translations"]:
+        # LLD для графиков — по denoised (для плеера)
         lld = _extract_lld(tr["path"])
 
-        df = smile_func.process_file(str(tr["path"]))
+        # Метрики для скоринга — по RAW (denoise искажает F0Std, F1bw)
+        raw_path = tr.get("raw_path", tr["path"])
+        df = smile_func.process_file(str(raw_path))
         features = df.iloc[0].to_dict()
-        voiced_fraction = _compute_voiced_fraction(tr["path"])
+        voiced_fraction = _compute_voiced_fraction(raw_path)
+        rhythm_cv = _compute_rhythm_cv(raw_path)
 
-        conf = compute_confidence(features, voiced_fraction)
+        conf = compute_confidence(features, voiced_fraction, rhythm_cv)
 
         entry = {
             "id": tr["id"],

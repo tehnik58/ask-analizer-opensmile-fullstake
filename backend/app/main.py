@@ -1,4 +1,5 @@
 import asyncio
+import shutil
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,14 +47,18 @@ async def upload(
         err = validate_file(tr.filename, len(tr_bytes))
         if err:
             raise HTTPException(422, f"{tr.filename}: {err}")
-        tr_path = session_dir / f"translation_{i}.wav"
-        tr_dur = convert_to_wav(tr_bytes, tr.filename, tr_path)
-        denoise_file(tr_path)
+        raw_path = session_dir / f"translation_{i}_raw.wav"
+        tr_dur = convert_to_wav(tr_bytes, tr.filename, raw_path)
+        # Denoised копия — только для плеера; анализ идёт по raw
+        denoised_path = session_dir / f"translation_{i}.wav"
+        shutil.copy2(raw_path, denoised_path)
+        denoise_file(denoised_path)
         session = get_session(session_id)
         session["translations"].append({
             "id": f"trans_{i}",
             "filename": tr.filename,
-            "path": tr_path,
+            "path": denoised_path,
+            "raw_path": raw_path,
             "duration": tr_dur,
         })
 

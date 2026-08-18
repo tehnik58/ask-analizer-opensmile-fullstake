@@ -1,9 +1,8 @@
 """
 Модуль скоринга уверенности речи.
 
-6 суб-скоров 0–100 с насыщением.
-F0Std использует U-образную шкалу: монотонность (мямля) и дрожание
-оба penalized, уверенная речь в середине.
+8 суб-скоров 0–100. F0Std — U-образная шкала.
+Метрики артикуляции/ритма вычисляются по RAW-аудио (denoise искажает просодию).
 """
 
 from dataclasses import dataclass
@@ -26,7 +25,7 @@ class ConfidenceResult:
 
 
 def _subscore(value: float, good: float, bad: float, invert: bool) -> float:
-    """Линейная интерполяция 0–100 с clamp. invert=True: lower=better."""
+    """Линейная интерполяция 0–100 с clamp."""
     if invert:
         if value <= good:
             return 100.0
@@ -59,82 +58,72 @@ METRIC_DEFS = {
         "name": "F0 вариативность",
         "feature": "F0semitoneFrom27.5Hz_sma3nz_stddevNorm",
         "kind": "window",
-        "lo_bad": 0.08,
-        "lo_good": 0.16,
-        "hi_good": 0.32,
-        "hi_bad": 0.50,
-        "weight": 0.25,
+        "lo_bad": 0.08, "lo_good": 0.16, "hi_good": 0.32, "hi_bad": 0.50,
+        "weight": 0.20,
     },
     "Jitter": {
         "name": "Jitter (дрожание)",
         "feature": "jitterLocal_sma3nz_amean",
         "kind": "linear",
-        "good": 0.025,
-        "bad": 0.055,
-        "invert": True,
-        "weight": 0.15,
+        "good": 0.025, "bad": 0.055, "invert": True,
+        "weight": 0.10,
     },
     "HNR": {
         "name": "HNR (гармоничность)",
         "feature": "HNRdBACF_sma3nz_amean",
         "kind": "linear",
-        "good": 5.5,
-        "bad": 2.0,
-        "invert": False,
-        "weight": 0.10,
+        "good": 5.5, "bad": 2.0, "invert": False,
+        "weight": 0.05,
     },
     "VoicedFraction": {
         "name": "Доля речи",
         "feature": None,
         "kind": "linear",
-        "good": 0.80,
-        "bad": 0.40,
-        "invert": False,
-        "weight": 0.15,
+        "good": 0.80, "bad": 0.40, "invert": False,
+        "weight": 0.05,
     },
     "Tempo": {
         "name": "Темп речи",
         "feature": "loudnessPeaksPerSec",
         "kind": "linear",
-        "good": 3.5,
-        "bad": 2.0,
-        "invert": False,
-        "weight": 0.20,
+        "good": 3.5, "bad": 2.0, "invert": False,
+        "weight": 0.15,
     },
     "F1bandwidth": {
         "name": "Артикуляция",
         "feature": "F1bandwidth_sma3nz_amean",
         "kind": "linear",
-        "good": 1100.0,
-        "bad": 1450.0,
-        "invert": True,
+        "good": 1100.0, "bad": 1450.0, "invert": True,
+        "weight": 0.10,
+    },
+    "F0Range": {
+        "name": "Диапазон тона",
+        "feature": "F0semitoneFrom27.5Hz_sma3nz_pctlrange0-2",
+        "kind": "linear",
+        "good": 5.5, "bad": 2.5, "invert": False,
         "weight": 0.15,
+    },
+    "RhythmCV": {
+        "name": "Ритм",
+        "feature": None,
+        "kind": "linear",
+        "good": 0.82, "bad": 1.12, "invert": True,
+        "weight": 0.20,
     },
 }
 
 NOISE_HNR_THRESHOLD = 10.0
 
 
-def _compute_subscore(key: str, defn: dict, features: dict, voiced_fraction: float) -> float:
-    if defn["feature"] is not None:
-        value = features.get(defn["feature"], 0.0)
-    else:
-        value = voiced_fraction
-
-    if defn["kind"] == "window":
-        return _subscore_window(
-            float(value), defn["lo_bad"], defn["lo_good"], defn["hi_good"], defn["hi_bad"]
-        )
-    return _subscore(float(value), defn["good"], defn["bad"], defn["invert"])
-
-
-def compute_confidence(features: dict, voiced_fraction: float) -> ConfidenceResult:
+def compute_confidence(features: dict, voiced_fraction: float, rhythm_cv: float = 0.5) -> ConfidenceResult:
     subscores = []
     weighted_sum = 0.0
     total_weight = 0.0
 
     for key, defn in METRIC_DEFS.items():
-        if defn["feature"] is not None:
+        if key == "RhythmCV":
+            value = rhythm_cv
+        elif defn["feature"] is not None:
             value = features.get(defn["feature"], 0.0)
         else:
             value = voiced_fraction
