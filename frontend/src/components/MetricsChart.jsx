@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -9,17 +9,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { METRICS } from "./MetricToggles";
+import { register, unregister } from "../caretBus";
 
-export default function MetricsChart({ lld, duration, enabledMetrics, registerCaret }) {
-  const caretRefs = useRef([]);
-
-  useEffect(() => {
-    if (!registerCaret) return;
-    const els = caretRefs.current.filter(Boolean);
-    els.forEach((el) => registerCaret(el));
-    return () => els.forEach((el) => registerCaret(el, true));
-  }, [registerCaret]);
-
+export default function MetricsChart({ lld, duration, enabledMetrics, chartId }) {
   const data = useMemo(() => {
     if (!lld || !lld.F0 || lld.F0.length === 0) return [];
     const len = lld.F0.length;
@@ -40,7 +32,7 @@ export default function MetricsChart({ lld, duration, enabledMetrics, registerCa
 
   return (
     <div className="metrics-chart">
-      {activeMetrics.map((m, idx) => (
+      {activeMetrics.map((m) => (
         <div key={m.key} className="chart-row">
           <span className="chart-label" style={{ color: m.color }}>{m.label}</span>
           <div className="chart-container">
@@ -66,7 +58,10 @@ export default function MetricsChart({ lld, duration, enabledMetrics, registerCa
             </ResponsiveContainer>
             <div className="chart-area-overlay">
               <div
-                ref={(el) => { caretRefs.current[idx] = el; }}
+                ref={(el) => {
+                  if (el) register(chartId, el);
+                  return () => unregister(chartId, el);
+                }}
                 className="chart-caret"
                 style={{ left: "0%" }}
               />

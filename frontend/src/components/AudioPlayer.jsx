@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Howl } from "howler";
 import { audioUrl } from "../api";
+import { move } from "../caretBus";
 
 function fmt(s) {
   const m = Math.floor(s / 60);
@@ -8,7 +9,7 @@ function fmt(s) {
   return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
 }
 
-export default function AudioPlayer({ src, label, onTimeUpdate, duration: durationProp }) {
+export default function AudioPlayer({ src, label, caretId, duration: durationProp }) {
   const soundRef = useRef(null);
   const rafRef = useRef(null);
   const fillRef = useRef(null);
@@ -35,12 +36,13 @@ export default function AudioPlayer({ src, label, onTimeUpdate, duration: durati
   }, [src]);
 
   const updateImperatively = useCallback((t, dur) => {
+    if (!Number.isFinite(t) || !Number.isFinite(dur)) return;
     const pct = dur > 0 ? (t / dur) * 100 : 0;
     if (fillRef.current) fillRef.current.style.width = `${pct}%`;
     if (handleRef.current) handleRef.current.style.left = `${pct}%`;
     if (timeRef.current) timeRef.current.textContent = `${fmt(t)} / ${fmt(dur)}`;
-    if (onTimeUpdate) onTimeUpdate(t, dur);
-  }, [onTimeUpdate]);
+    if (caretId) move(caretId, pct);
+  }, [caretId]);
 
   const tick = useCallback(() => {
     if (soundRef.current && soundRef.current.playing()) {
