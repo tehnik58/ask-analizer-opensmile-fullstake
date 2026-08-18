@@ -52,7 +52,7 @@ def _compute_confidence(audio_path: Path) -> tuple[float, str, str | None]:
     warning = None
     loudness_amean = float(f["loudness_sma3_amean"])
     if loudness_amean > NOISE_LOUDNESS_THRESHOLD or jitter_mean > NOISE_JITTER_THRESHOLD:
-        warning = "Запись шумная, оценка может быть неточной"
+        warning = "Запись шумная даже после очистки, оценка может быть неточной"
 
     return score, label, warning
 

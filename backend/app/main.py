@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .sessions import create_session, get_session, set_status, get_results_for_api, DATA_DIR
 from .audio import validate_file, convert_to_wav
+from .denoise import denoise_file
 
 app = FastAPI(title="Translation Confidence Analyzer")
 
@@ -47,6 +48,7 @@ async def upload(
             raise HTTPException(422, f"{tr.filename}: {err}")
         tr_path = session_dir / f"translation_{i}.wav"
         tr_dur = convert_to_wav(tr_bytes, tr.filename, tr_path)
+        denoise_file(tr_path)
         session = get_session(session_id)
         session["translations"].append({
             "id": f"trans_{i}",
