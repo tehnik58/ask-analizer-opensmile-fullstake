@@ -15,18 +15,6 @@ function App() {
   const [error, setError] = useState(null);
   const [enabledMetrics, setEnabledMetrics] = useState(["F0", "Loudness"]);
 
-  // Реестр кареток: id → Set<HTMLElement>
-  const caretRegistry = useRef({});
-
-  const registerCaret = useCallback((id, el, remove) => {
-    if (!caretRegistry.current[id]) caretRegistry.current[id] = new Set();
-    if (remove) {
-      caretRegistry.current[id].delete(el);
-    } else {
-      caretRegistry.current[id].add(el);
-    }
-  }, []);
-
   const poll = useCallback(async (sessionId) => {
     setPolling(true);
     const maxAttempts = 60;
@@ -57,7 +45,6 @@ function App() {
   const handleUpload = async (translations) => {
     setError(null);
     setResults(null);
-    caretRegistry.current = {};
     setLoading(true);
     try {
       const { session_id } = await uploadFiles(translations);
@@ -74,19 +61,6 @@ function App() {
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
-
-  const makeTimeUpdateHandler = useCallback((id) => {
-    return (t, dur) => {
-      const els = caretRegistry.current[id];
-      if (!els) return;
-      const pct = dur > 0 ? (t / dur) * 100 : 0;
-      els.forEach((el) => { el.style.left = `${pct}%`; });
-    };
-  }, []);
-
-  const makeRegisterCaret = useCallback((id) => {
-    return (el, remove) => registerCaret(id, el, remove);
-  }, [registerCaret]);
 
   return (
     <div className="app">
@@ -114,14 +88,14 @@ function App() {
               <AudioPlayer
                 src={tr.audio_url}
                 label={tr.id}
+                caretId={tr.id}
                 duration={tr.duration_sec}
-                onTimeUpdate={makeTimeUpdateHandler(tr.id)}
               />
               <MetricsChart
                 lld={tr.lld}
                 duration={tr.duration_sec}
                 enabledMetrics={enabledMetrics}
-                registerCaret={makeRegisterCaret(tr.id)}
+                chartId={tr.id}
               />
             </section>
           ))}
