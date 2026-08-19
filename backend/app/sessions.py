@@ -1,16 +1,10 @@
-import os
-import sys
 import uuid
 from pathlib import Path
 from threading import Lock
 
 
 def _resolve_data_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        d = base / "TCA" / "data"
-    else:
-        d = Path(__file__).resolve().parent.parent / "data"
+    d = Path(__file__).resolve().parent.parent / "data"
     d.mkdir(parents=True, exist_ok=True)
     return d
 

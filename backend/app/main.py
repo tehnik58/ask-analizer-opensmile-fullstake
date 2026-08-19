@@ -1,6 +1,5 @@
 import asyncio
 import shutil
-import sys
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,13 +25,7 @@ app.mount("/static", StaticFiles(directory=str(DATA_DIR)), name="static")
 
 def _get_frontend_dist() -> Path | None:
     """Возвращает путь к собранному фронтенду или None (для dev-режима)."""
-    if getattr(sys, "frozen", False):
-        # PyInstaller — dist лежит рядом с exe в подпапке web/
-        base = Path(sys._MEIPASS)
-        dist = base / "web"
-    else:
-        # Dev: backend/../frontend/dist
-        dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
     return dist if dist.is_dir() else None
 
 
@@ -91,7 +84,7 @@ async def get_results(session_id: str):
     return result
 
 
-# --- Раздача фронтенда (dev и desktop) ---
+# --- Раздача фронтенда (dev) ---
 
 _frontend_dist = _get_frontend_dist()
 
