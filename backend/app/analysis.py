@@ -8,7 +8,7 @@ import opensmile
 import numpy as np
 
 from .scoring import compute_confidence, ConfidenceResult
-from .audio import convert_url_to_wav
+from .audio import convert_to_wav, convert_url_to_wav, validate_file
 from .denoise import denoise_file
 
 smile_lld = opensmile.Smile(
@@ -74,6 +74,48 @@ def compute_rhythm_cv(audio_path: Path) -> float:
     return float(np.std(seg_lens) / mean_len)
 
 
+def _score_audio(raw_path: Path, denoised_path: Path) -> tuple[dict, ConfidenceResult]:
+    """LLD from the denoised copy; scoring features from RAW (denoise distorts prosody)."""
+    lld = extract_lld(denoised_path)
+    df = smile_func.process_file(str(raw_path))
+    features = df.iloc[0].to_dict()
+    voiced_fraction = compute_voiced_fraction(raw_path)
+    rhythm_cv = compute_rhythm_cv(raw_path)
+    conf = compute_confidence(features, voiced_fraction, rhythm_cv)
+    return lld, conf
+
+
+def analyze_bytes(data: bytes, filename: str, audio_id: str = "audio") -> AudioResult:
+    """Analyze in-memory audio through the full pipeline.
+
+    Validates format/size, converts to WAV 16 kHz mono, scores on RAW audio,
+    extracts LLD from a denoised copy. Temp files are cleaned up automatically.
+    """
+    err = validate_file(filename, len(data))
+    if err:
+        raise ValueError(err)
+
+    raw_path = Path(tempfile.mktemp(suffix=".wav"))
+    denoised_path = Path(tempfile.mktemp(suffix=".wav"))
+    tmp_files = [raw_path, denoised_path]
+    try:
+        duration = convert_to_wav(data, filename, raw_path)
+        shutil.copy2(raw_path, denoised_path)
+        denoise_file(denoised_path)
+
+        lld, conf = _score_audio(raw_path, denoised_path)
+        return AudioResult(
+            id=audio_id,
+            audio_url=filename,
+            duration_sec=round(duration, 2),
+            confidence=conf,
+            lld=lld,
+        )
+    finally:
+        for f in tmp_files:
+            f.unlink(missing_ok=True)
+
+
 def analyze_translations(translations):
     """
     Analyze a list of audio translations from URLs.
@@ -99,12 +141,7 @@ def analyze_translations(translations):
             shutil.copy2(raw_path, denoised_path)
             denoise_file(denoised_path)
 
-            lld = extract_lld(denoised_path)
-            df = smile_func.process_file(str(raw_path))
-            features = df.iloc[0].to_dict()
-            voiced_fraction = compute_voiced_fraction(raw_path)
-            rhythm_cv = compute_rhythm_cv(raw_path)
-            conf = compute_confidence(features, voiced_fraction, rhythm_cv)
+            lld, conf = _score_audio(raw_path, denoised_path)
 
             results.append(AudioResult(
                 id=tr["id"],
